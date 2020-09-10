@@ -78,7 +78,6 @@ func initConfig() {
 	getOrSetDefaults("GHORG_SCM_TYPE")
 	getOrSetDefaults("GHORG_COLOR")
 	getOrSetDefaults("GHORG_SKIP_ARCHIVED")
-	getOrSetDefaults("GHORG_BACKUP")
 	getOrSetDefaults("GHORG_CONCURRENCY")
 	getOrSetDefaults("GHORG_MATCH_PREFIX")
 	// Optionally set
@@ -116,7 +115,7 @@ func getOrSetDefaults(envVar string) {
 	if viper.GetString(envVar) == "" {
 		switch envVar {
 		case "GHORG_ABSOLUTE_PATH_TO_CLONE_TO":
-			os.Setenv(envVar, HomeDir()+"/Desktop/ghorg/")
+			os.Setenv(envVar, HomeDir()+"/src/")
 		case "GHORG_BRANCH":
 			os.Setenv(envVar, "master")
 		case "GHORG_CLONE_PROTOCOL":

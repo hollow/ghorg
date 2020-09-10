@@ -36,7 +36,6 @@ var (
 	outputDir         string
 	topics            string
 	skipArchived      bool
-	backup            bool
 	args              []string
 	cloneErrors       []string
 	cloneInfos        []string
@@ -48,7 +47,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&color, "color", "", "", "GHORG_COLOR - toggles colorful output on/off (default on)")
 	rootCmd.AddCommand(cloneCmd)
 	cloneCmd.Flags().StringVar(&protocol, "protocol", "", "GHORG_CLONE_PROTOCOL - protocol to clone with, ssh or https, (default https)")
-	cloneCmd.Flags().StringVarP(&path, "path", "p", "", "GHORG_ABSOLUTE_PATH_TO_CLONE_TO - absolute path the ghorg_* directory will be created. Must end with / (default $HOME/Desktop/ghorg)")
+	cloneCmd.Flags().StringVarP(&path, "path", "p", "", "GHORG_ABSOLUTE_PATH_TO_CLONE_TO - absolute path the ghorg_* directory will be created. Must end with / (default $HOME/src)")
 	cloneCmd.Flags().StringVarP(&branch, "branch", "b", "", "GHORG_BRANCH - branch left checked out for each repo cloned (default master)")
 	cloneCmd.Flags().StringVarP(&token, "token", "t", "", "GHORG_GITHUB_TOKEN/GHORG_GITLAB_TOKEN/GHORG_BITBUCKET_APP_PASSWORD - scm token to clone with")
 	cloneCmd.Flags().StringVarP(&bitbucketUsername, "bitbucket-username", "", "", "GHORG_BITBUCKET_USERNAME - bitbucket only: username associated with the app password")
@@ -56,12 +55,11 @@ func init() {
 	// TODO: make gitlab terminology make sense https://about.gitlab.com/2016/01/27/comparing-terms-gitlab-github-bitbucket/
 	cloneCmd.Flags().StringVarP(&cloneType, "clone-type", "c", "", "GHORG_CLONE_TYPE - clone target type, user or org (default org)")
 	cloneCmd.Flags().BoolVar(&skipArchived, "skip-archived", false, "GHORG_SKIP_ARCHIVED - skips archived repos, github/gitlab only")
-	cloneCmd.Flags().BoolVar(&skipArchived, "preserve-dir", false, "GHORG_PRESERVE_DIRECTORY_STRUCTURE - clones repos in a directory structure that matches gitlab namespaces eg company/unit/subunit/app would clone into *_ghorg/unit/subunit/app, gitlab only")
-	cloneCmd.Flags().BoolVar(&backup, "backup", false, "GHORG_BACKUP - backup mode, clone as mirror, no working copy (ignores branch parameter)")
+	cloneCmd.Flags().BoolVar(&skipArchived, "preserve-dir", false, "GHORG_PRESERVE_DIRECTORY_STRUCTURE - clones repos in a directory structure that matches gitlab namespaces eg company/unit/subunit/app would clone into */unit/subunit/app, gitlab only")
 	cloneCmd.Flags().StringVarP(&baseURL, "base-url", "", "", "GHORG_SCM_BASE_URL - change SCM base url, for on self hosted instances (currently gitlab/github only, use format of https://git.mydomain.com/api/v3)")
 	cloneCmd.Flags().StringVarP(&concurrency, "concurrency", "", "", "GHORG_CONCURRENCY - max goroutines to spin up while cloning (default 25)")
 	cloneCmd.Flags().StringVarP(&topics, "topics", "", "", "GHORG_GITHUB_TOPICS - comma seperated list of github topics to filter for")
-	cloneCmd.Flags().StringVarP(&outputDir, "output-dir", "", "", "GHORG_OUTPUT_DIR - name of directory repos will be cloned into, will force underscores and always append _ghorg (default {org/repo being cloned}_ghorg)")
+	cloneCmd.Flags().StringVarP(&outputDir, "output-dir", "", "", "GHORG_OUTPUT_DIR - name of directory repos will be cloned into, will force underscores (default {org/repo being cloned})")
 	cloneCmd.Flags().StringVarP(&matchPrefix, "match-prefix", "", "", "GHORG_MATCH_PREFIX - only clone repos with matching prefix, can be a comma separated list (default \"\")")
 }
 
@@ -145,10 +143,6 @@ func cloneFunc(cmd *cobra.Command, argz []string) {
 		os.Setenv("GHORG_PRESERVE_DIRECTORY_STRUCTURE", "true")
 	}
 
-	if cmd.Flags().Changed("backup") {
-		os.Setenv("GHORG_BACKUP", "true")
-	}
-
 	if cmd.Flags().Changed("output-dir") {
 		d := cmd.Flag("output-dir").Value.String()
 		os.Setenv("GHORG_OUTPUT_DIR", d)
@@ -229,7 +223,7 @@ func getAllUserCloneUrls() ([]repo.Data, error) {
 }
 
 func createDirIfNotExist() {
-	if _, err := os.Stat(os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO") + parentFolder + "_ghorg"); os.IsNotExist(err) {
+	if _, err := os.Stat(os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO") + parentFolder); os.IsNotExist(err) {
 		err = os.MkdirAll(os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO"), 0700)
 		if err != nil {
 			panic(err)
@@ -375,69 +369,58 @@ func CloneAllRepos() {
 				path = repo.Path
 			}
 
-			repoDir := os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO") + parentFolder + "_ghorg" + "/" + path
-
-			if os.Getenv("GHORG_BACKUP") == "true" {
-				repoDir = os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO") + parentFolder + "_ghorg_backup" + "/" + path
-			}
+			repoDir := os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO") + parentFolder + "/" + path
 
 			if repoExistsLocally(repoDir) == true {
-				if os.Getenv("GHORG_BACKUP") == "true" {
-					cmd := exec.Command("git", "remote", "update")
-					cmd.Dir = repoDir
-					err := cmd.Run()
-					if err != nil {
-						e := fmt.Sprintf("Could not update remotes in Repo: %s Error: %v", repo.URL, err)
-						cloneErrors = append(cloneErrors, e)
-						return
-					}
-				} else {
+				cmd := exec.Command("git", "status", "--porcelain")
+				cmd.Dir = repoDir
+				out, _ := cmd.Output()
+				if len(out) != 0 {
+					e := fmt.Sprintf("Cannot update %s, working copy is dirty. git status returned:\n%s", repo.URL, string(out))
+					cloneInfos = append(cloneInfos, e)
+					return
+				}
 
-					cmd := exec.Command("git", "checkout", branch)
-					cmd.Dir = repoDir
-					err := cmd.Run()
-					if err != nil {
-						e := fmt.Sprintf("Could not checkout out %s, branch may not exist, no changes made Repo: %s Error: %v", branch, repo.URL, err)
-						cloneInfos = append(cloneInfos, e)
-						return
-					}
+				cmd = exec.Command("git", "checkout", branch)
+				cmd.Dir = repoDir
+				err = cmd.Run()
+				if err != nil {
+					e := fmt.Sprintf("Could not checkout out %s, branch may not exist, no changes made Repo: %s Error: %v", branch, repo.URL, err)
+					cloneInfos = append(cloneInfos, e)
+					return
+				}
 
-					cmd = exec.Command("git", "clean", "-f", "-d")
-					cmd.Dir = repoDir
-					err = cmd.Run()
-					if err != nil {
-						e := fmt.Sprintf("Problem running git clean: %s Error: %v", repo.URL, err)
-						cloneErrors = append(cloneErrors, e)
-						return
-					}
+				cmd = exec.Command("git", "clean", "-f", "-d")
+				cmd.Dir = repoDir
+				err = cmd.Run()
+				if err != nil {
+					e := fmt.Sprintf("Problem running git clean: %s Error: %v", repo.URL, err)
+					cloneErrors = append(cloneErrors, e)
+					return
+				}
 
-					cmd = exec.Command("git", "reset", "--hard", "origin/"+branch)
-					cmd.Dir = repoDir
-					err = cmd.Run()
-					if err != nil {
-						e := fmt.Sprintf("Problem resetting %s Repo: %s Error: %v", branch, repo.URL, err)
-						cloneErrors = append(cloneErrors, e)
-						return
-					}
+				cmd = exec.Command("git", "reset", "--hard", "origin/"+branch)
+				cmd.Dir = repoDir
+				err = cmd.Run()
+				if err != nil {
+					e := fmt.Sprintf("Problem resetting %s Repo: %s Error: %v", branch, repo.URL, err)
+					cloneErrors = append(cloneErrors, e)
+					return
+				}
 
-					// TODO: handle case where repo was removed, should not give user an error
-					cmd = exec.Command("git", "pull", "origin", branch)
-					cmd.Dir = repoDir
-					err = cmd.Run()
-					if err != nil {
-						e := fmt.Sprintf("Problem trying to pull %v Repo: %s Error: %v", branch, repo.URL, err)
-						cloneErrors = append(cloneErrors, e)
-						return
-					}
+				// TODO: handle case where repo was removed, should not give user an error
+				cmd = exec.Command("git", "pull", "origin", branch)
+				cmd.Dir = repoDir
+				err = cmd.Run()
+				if err != nil {
+					e := fmt.Sprintf("Problem trying to pull %v Repo: %s Error: %v", branch, repo.URL, err)
+					cloneErrors = append(cloneErrors, e)
+					return
 				}
 			} else {
 				// if https clone and github/gitlab add personal access token to url
 
 				args := []string{"clone", repo.CloneURL, repoDir}
-				if os.Getenv("GHORG_BACKUP") == "true" {
-					args = append(args, "--mirror")
-				}
-
 				cmd := exec.Command("git", args...)
 				err := cmd.Run()
 
@@ -470,12 +453,7 @@ func CloneAllRepos() {
 
 	printRemainingMessages()
 
-	// TODO: fix all these if else checks with ghorg_backups
-	if os.Getenv("GHORG_BACKUP") == "true" {
-		colorlog.PrintSuccess(fmt.Sprintf("Finished! %s%s_ghorg_backup", os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO"), parentFolder))
-	} else {
-		colorlog.PrintSuccess(fmt.Sprintf("Finished! %s%s_ghorg", os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO"), parentFolder))
-	}
+	colorlog.PrintSuccess(fmt.Sprintf("Finished! %s%s", os.Getenv("GHORG_ABSOLUTE_PATH_TO_CLONE_TO"), parentFolder))
 }
 
 func asciiTime() {
@@ -503,14 +481,11 @@ func PrintConfigs() {
 	if os.Getenv("GHORG_SKIP_ARCHIVED") == "true" {
 		colorlog.PrintInfo("* Skip Archived : " + os.Getenv("GHORG_SKIP_ARCHIVED"))
 	}
-	if os.Getenv("GHORG_BACKUP") == "true" {
-		colorlog.PrintInfo("* Backup        : " + os.Getenv("GHORG_BACKUP"))
-	}
 	if configs.GhorgIgnoreDetected() == true {
 		colorlog.PrintInfo("* Ghorgignore   : true")
 	}
 	if os.Getenv("GHORG_OUTPUT_DIR") != "" {
-		colorlog.PrintInfo("* Output Dir    : " + parentFolder + "_ghorg")
+		colorlog.PrintInfo("* Output Dir    : " + parentFolder)
 	}
 
 	colorlog.PrintInfo("*************************************")

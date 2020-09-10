@@ -10,13 +10,14 @@ ghorg allows you to quickly clone all of an orgs, or users repos into a single d
 4. Onboarding
 5. Performing Audits
 
-> When running ghorg a second time, all local changes in your *_ghorg directory will be overwritten by whats on GitHub. If you are working out of this directory, make sure you rename it before running a second time otherwise all of your changes will be lost.
+> When running ghorg a second time, all local changes in your directory will be overwritten by whats on GitHub. If you are working out of this directory, make sure you rename it before running a second time otherwise all of your changes will be lost.
 
 <p align="center">
   <img width="648" alt="ghorg cli example" src="https://user-images.githubusercontent.com/1512282/63229247-5459f880-c1b3-11e9-9e5d-d20723046946.png">
 </p>
 
 ## Supported Providers
+
 - GitHub
 - GitLab
 - Bitbucket
@@ -33,6 +34,7 @@ ghorg allows you to quickly clone all of an orgs, or users repos into a single d
 $ brew update
 $ brew upgrade git
 ```
+
 > required
 
 ```bash
@@ -69,6 +71,7 @@ $ ghorg clone --help
 Configuration for each clone can be set in two ways. The first is in `$HOME/.config/ghorg/conf.yaml`. This file should be created from the [sample-conf.yaml](https://github.com/gabrie30/ghorg/blob/master/sample-conf.yaml) by copying into `$HOME/.config/ghorg/conf.yaml`. The second method of configuration is setting flags via the cli, run `$ ghorg clone --help` for a list of flags. A flag set on the command line will overwrite any setting in the conf.yaml
 
 ### github setup
+
 1. Create [Personal Access Token](https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line) with all `repo` scopes. Update `GHORG_GITHUB_TOKEN` in your `ghorg/conf.yaml`, as a cli flag, or add to your [osx keychain](https://help.github.com/en/github/using-git/caching-your-github-password-in-git).
 
 ### gitlab setup
@@ -92,9 +95,10 @@ $ security find-internet-password -s github.com  | grep "acct" | awk -F\" '{ pri
 $ security find-internet-password -s gitlab.com  | grep "acct" | awk -F\" '{ print $4 }'
 ```
 
-> It's recommended to store github/gitlab tokens in the osxkeychain, if this command returns anything other than your token see Troubleshooting section below. However, you can always add your token to the $HOME/.config/ghorg/conf.yaml or use the (--token, -t) flags.
+> It's recommended to store github/gitlab tokens in the osxkeychain, if this command returns anything other than your token see Troubleshooting section below. However, you can always add your token to the \$HOME/.config/ghorg/conf.yaml or use the (--token, -t) flags.
 
 ## Ignoring Repos
+
 - To ignore any archived repos while cloning use the `--skip-archived` flag (github/gitlab only)
 - To ignore specific repos create a `ghorgignore` file inside `$HOME/.config/ghorg`. Each line in this file is considered a substring and will be compared against each repos clone url. If the clone url contains a substring in the `ghorgignore` it will be excluded from cloning. To prevent accidentally excluding a repo, you should make each line as specific as possible, eg. `https://github.com/gabrie30/ghorg.git` or `git@github.com:gabrie30/ghorg.git` depending on how you clone.
 
@@ -129,4 +133,5 @@ $ security find-internet-password -s gitlab.com  | grep "acct" | awk -F\" '{ pri
 - Make sure your `$ git --version` is >= 2.19.0
 
 ### Updating brew tap
+
 - [See Readme](https://github.com/gabrie30/homebrew-utils/blob/master/README.md)
