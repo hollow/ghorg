@@ -516,6 +516,5 @@ func parseParentFolder(argz []string) {
 		return
 	}
 
-	pf := strings.ReplaceAll(argz[0], "-", "_")
-	parentFolder = strings.ToLower(pf)
+	parentFolder = strings.ToLower(argz[0])
 }
