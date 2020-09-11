@@ -512,7 +512,7 @@ func addTokenToHTTPSCloneURL(url string, token string) string {
 
 func parseParentFolder(argz []string) {
 	if os.Getenv("GHORG_OUTPUT_DIR") != "" {
-		parentFolder = strings.ReplaceAll(os.Getenv("GHORG_OUTPUT_DIR"), "-", "_")
+		parentFolder = os.Getenv("GHORG_OUTPUT_DIR")
 		return
 	}
 
